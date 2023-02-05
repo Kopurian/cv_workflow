@@ -57,31 +57,39 @@ def KMeans(mat2, k_value):
     return res2
 
 @st.cache
-def load_depths(bot, top):
+def load_depthlog():
     depthlog = pd.read_csv('depthlog.txt', header=None)
+    
+    return depthlog
+
+def load_depths(bot, top):
+    depthlog = load_depthlog()
     depth_range = depthlog.index[(depthlog[0]==bot) | (depthlog[0]==top)].tolist()
     
     return depth_range
    
 @st.cache 
-def load_data(bot, top):
+def load_data():
     files_list = ['data1.txt', 'data2.txt', 'data3.txt', 'data4.txt']
 
     df_list = []
     for file in files_list:
         df_list.append(pd.read_csv(file, header=None, sep=' '))
 
-    donnee = pd.concat(df_list, ignore_index=True)
+    big_df = pd.concat(df_list, ignore_index=True)
     # donnee = pd.read_csv('for_matlab.txt', sep=" ", header=None)
-    depthlog = pd.read_csv('depthlog.txt', header=None)
+    
+    return big_df
 
-    ##
-    depth_range = depthlog.index[(depthlog[0]==bot) | (depthlog[0]==top)].tolist()
+def data_gen(bot, top):
+    
+    donnee = load_data()
+    depthlog = load_depthlog()
+    depth_range = load_depths(bot, top)
+    # depth_range = depthlog.index[(depthlog[0]==bot) | (depthlog[0]==top)].tolist()
     depth_bot = depth_range[0]
     depth_top = depth_range[1]
     donnee = donnee.iloc[depth_bot:depth_top+1,:]
-
-    # donnee = donnee.drop(0, axis=1)
 
     #if amplitudes are considered
     max_donnee = donnee.max().max()
@@ -119,26 +127,27 @@ st.header('Original Image')
 st.sidebar.title('Parameters For Adjustment')
 st.sidebar.header('Depth Interval')
 
-bot = st.sidebar.number_input('State top depth in ft', value=4044, max_value = 5295)
+bot = st.sidebar.number_input('State top depth in ft. The interval is 2ft for better resolution', value=4051, max_value = 5295)
 top = bot + 2
 depths = load_depths(bot, top)
-mat2 = load_data(bot, top)
+mat2 = data_gen(bot, top)
 
-st.sidebar.header('Set the color range')
+st.sidebar.header('Set the color range for visualization purposes')
 color_range = st.sidebar.slider(
-    "Set your range for the image:",
+    "Pixel range:",
     value=(float(mat2.min().min()),float(mat2.max().max())))
 
 fig = px.imshow(mat2,aspect='auto',color_continuous_scale = 'YlOrBr_r', width=800, height=800, range_color=(color_range[0], color_range[1]))
 fig.update_xaxes(visible=False)
 # fig.update_yaxes(range=[depths[1],depths[0]])
-# fig.update_layout(yaxis_range=[depths[-1],depths[0]])
+# fig.update_layout(yaxis_range=[depths[0],depths[1]])
 
 st.plotly_chart(fig)
 
 st.header('Average / Gaussian / Bilateral')
+st.write('Choose between the different filtering options on the sidebar or experiment to see which fits the depth interval better.')
 
-filter_option = st.sidebar.radio('Pick your choice of filters', ('Averaging Kernel', 'Gaussian Blur', 'Bilateral Filter'), index=2) # Boolean
+filter_option = st.sidebar.radio('Filter Options', ('Averaging Kernel', 'Gaussian Blur', 'Bilateral Filter'), index=2) # Boolean
 
 if filter_option == 'Averaging Kernel':
     kernel_avg = np.ones((5,5),np.float32)/25
@@ -154,6 +163,7 @@ fig_filter = px.imshow(output,aspect='auto',color_continuous_scale = 'YlOrBr_r',
 st.plotly_chart(fig_filter)
 
 st.header('Kmeans Computation')
+st.write('This is an experimental step in the workflow. If checked, the image shown is only for visualiation and will not be used for analysis.')
 st.sidebar.header('Kmeans Args')
 kmeans_check = st.sidebar.checkbox('Would you like to run KMeans?')
 if kmeans_check == True:
@@ -175,6 +185,7 @@ if kmeans_check == True:
 
     
 st.header('Gabor Filters')
+st.write('This step filters the lines in the image based on a range of angles specified by the parameters in the sidebar.')
 st.sidebar.header('Gabor Filter Args')
 
 num_filters = st.sidebar.slider('Number of filters', 3, 50, 16)
@@ -192,10 +203,11 @@ fig3 = px.imshow(image_g,aspect='auto',color_continuous_scale = 'gray', width=80
 st.plotly_chart(fig3)
 
 st.header('Canny Edge Detection')
+st.write('This step detects edges contained in the resultant image and connects qualifying edges based on the threshold values in the sidebar. An optional L2 gradient can also be used.')
 st.sidebar.header('Canny Edge Args')
 
 # Defining all the parameters
-threshold_values = st.sidebar.slider('Threshold values', 10, 1000, (100, 200))
+threshold_values = st.sidebar.slider('Threshold values', 10, 1000, (500, 600))
 aperture_size = 5 # Aperture size
 L2Gradient = st.sidebar.radio('Enable L2 Gradient?', ('True', 'False'), index=1) # Boolean
   
@@ -214,11 +226,15 @@ fig4 = px.imshow(edge,aspect='auto',color_continuous_scale = 'gray', width=800, 
 st.plotly_chart(fig4)
 
 st.header('Hough Transform')
+st.write('This step will check for continuous lines and optionally remove any lines that exceed an angle threshold.')
 st.sidebar.header('Hough Transform Args')
 
 hough_thresh = st.sidebar.slider('Threshold', 1, 100, 10)
-minLineLength = st.sidebar.slider('Minimum Line Length', 1, 50, 7)  # Larger Values produce more edges
+minLineLength = st.sidebar.slider('Minimum Line Length', 1, 50, 10)  # Larger Values produce more edges
 maxLineGap = st.sidebar.slider('Maximum Line Gap', 1, 50, 5)
+angle_check = st.sidebar.checkbox('Keep Only Horizontal Lines?', value = True)
+if angle_check == True:
+    angle_thresh = st.sidebar.slider('Angle Threshold', 10, 90, 10)
 
 lines = cv2.HoughLinesP(edge, 1, np.pi/180, threshold=hough_thresh, minLineLength=minLineLength, maxLineGap=maxLineGap)
 dummy = np.ones(shape=mat2.shape, dtype=np.uint8)
@@ -229,7 +245,12 @@ if lines is not None:
         l = lines[line][0]
         pt1 = (l[0], l[1])
         pt2 = (l[2], l[3])
-        cv2.line(dummy, pt1, pt2, (0,0,255), 3)
+        angle = np.arctan2(l[3] - l[1], l[2] - l[0]) * 180. / np.pi
+        if angle_check == True and angle < angle_thresh:
+            # if a:
+            cv2.line(dummy, pt1, pt2, (0,0,255), 3)
+        elif angle_check == False:
+            cv2.line(dummy, pt1, pt2, (0,0,255), 3)
 elif lines == None:
     statement = 'Lines are not available'
     pass
