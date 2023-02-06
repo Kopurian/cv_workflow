@@ -7,6 +7,12 @@ from scipy import signal
 import cv2
 import plotly.express as px
 
+# explicit function to normalize array
+def normalize_2d(matrix):
+    norm = np.linalg.norm(matrix)
+    matrix = matrix/norm  # normalized matrix
+    return matrix
+
 def create_gaborfilter(number, kernel_size, sigma, lambd, gamma, psi):
     # This function is designed to produce a set of GaborFilters 
     # an even distribution of theta values equally distributed amongst pi rad / 180 degree
@@ -131,6 +137,7 @@ bot = st.sidebar.number_input('State top depth in ft. The interval is 2ft for be
 top = bot + 2
 depths = load_depths(bot, top)
 mat2 = data_gen(bot, top)
+ori_img = mat2.copy()
 
 st.sidebar.header('Set the color range for visualization purposes')
 color_range = st.sidebar.slider(
@@ -163,7 +170,7 @@ fig_filter = px.imshow(output,aspect='auto',color_continuous_scale = 'YlOrBr_r',
 st.plotly_chart(fig_filter)
 
 st.header('Kmeans Computation')
-st.write('This is an experimental step in the workflow. If checked, the image shown is only for visualiation and will not be used for analysis.')
+st.write('This is an experimental step in the workflow. If checked, the image shown is only for visualization and will not be used for analysis.')
 st.sidebar.header('Kmeans Args')
 kmeans_check = st.sidebar.checkbox('Would you like to run KMeans?')
 if kmeans_check == True:
@@ -240,24 +247,26 @@ lines = cv2.HoughLinesP(edge, 1, np.pi/180, threshold=hough_thresh, minLineLengt
 dummy = np.ones(shape=mat2.shape, dtype=np.uint8)
 
 if lines is not None:
-    statement = 'Lines are available'
+    statement = f'There are {len(lines)} lines in this image'
+    st.success(statement)
     for line in range(0, len(lines)):
         l = lines[line][0]
         pt1 = (l[0], l[1])
         pt2 = (l[2], l[3])
         angle = np.arctan2(l[3] - l[1], l[2] - l[0]) * 180. / np.pi
         if angle_check == True and angle < angle_thresh:
-            # if a:
-            cv2.line(dummy, pt1, pt2, (0,0,255), 3)
+            cv2.line(dummy, pt1, pt2, (0,0,255), 1)
         elif angle_check == False:
-            cv2.line(dummy, pt1, pt2, (0,0,255), 3)
+            cv2.line(dummy, pt1, pt2, (0,0,255), 1)
 elif lines == None:
-    statement = 'Lines are not available'
+    statement = 'There are no lines in this image'
+    st.error(statement)
     pass
 
-st.write(f'{statement}')
+masked = np.ma.masked_where(dummy == 1, dummy)
 
 fig_hough, ax = plt.subplots(figsize=[10,10])
-ax.imshow(dummy, cmap = 'gray', aspect='auto')
+ax.imshow(ori_img, cmap='YlOrBr_r', aspect='auto', vmin=color_range[0], vmax=color_range[1])
+ax.imshow(masked, cmap = 'gray', aspect='auto', alpha=0.5)
 plt.xticks([]), plt.yticks([])
 st.pyplot(fig_hough)
