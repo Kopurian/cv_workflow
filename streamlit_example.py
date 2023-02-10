@@ -248,6 +248,7 @@ st.header('Hough Transform')
 st.write('This step will check for continuous lines and optionally remove any lines that exceed an angle threshold.')
 st.sidebar.header('Hough Transform Args')
 
+hough_rho = st.sidebar.slider('Rho', 1, 5, 1)
 hough_thresh = st.sidebar.slider('Threshold', 1, 100, 10)
 minLineLength = st.sidebar.slider('Minimum Line Length', 1, 50, 10)  # Larger Values produce more edges
 maxLineGap = st.sidebar.slider('Maximum Line Gap', 1, 50, 5)
@@ -255,7 +256,7 @@ angle_check = st.sidebar.checkbox('Keep Only Horizontal Lines?', value = True)
 if angle_check == True:
     angle_thresh = st.sidebar.slider('Angle Threshold', 10, 90, 10)
 
-lines = cv2.HoughLinesP(edge, 1, np.pi/180, threshold=hough_thresh, minLineLength=minLineLength, maxLineGap=maxLineGap)
+lines = cv2.HoughLinesP(edge, hough_rho, np.pi/180, threshold=hough_thresh, minLineLength=minLineLength, maxLineGap=maxLineGap)
 dummy = np.ones(shape=mat2.shape, dtype=np.uint8)
 
 if lines is not None:
