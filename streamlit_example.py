@@ -9,7 +9,7 @@ import plotly.express as px
 import io
 # import diplib as dip
 
-##### Functions
+##### Functions #####
 
 # explicit function to normalize array
 def normalize_2d(matrix):
@@ -129,7 +129,7 @@ def data_gen(bot, top):
     
     return mat2
 
-##### Page Setup
+##### Page Setup #####
 
 st.title('Computer Vision Workflow')
 st.write('This dashboard is intended for easier observations when changing different values of the algorithms contained in this workflow.')
@@ -137,7 +137,7 @@ st.header('Original Image')
 st.sidebar.title('Parameters For Adjustment')
 st.sidebar.header('Depth Interval')
 
-##### Load data and set range visualization
+##### Load data and set range visualization #####
 
 bot = st.sidebar.number_input('State top depth in ft. The interval is 2ft for better resolution', value=4051, max_value = 5295)
 top = bot + 2
@@ -155,7 +155,7 @@ fig_original.update_xaxes(visible=False)
 
 st.plotly_chart(fig_original)
 
-##### Kernel selection
+##### Kernel selection #####
 
 st.header('Average / Gaussian / Bilateral')
 st.write('Choose between the different filtering options on the sidebar or experiment to see which fits the depth interval better.')
@@ -175,7 +175,7 @@ elif filter_option == 'Median Filter':
 fig_filter = px.imshow(output,aspect='auto',color_continuous_scale = 'YlOrBr_r', width=800, height=800, range_color=(color_range[0], color_range[1]))
 st.plotly_chart(fig_filter)
 
-##### Gabor filters
+##### Gabor filters #####
     
 st.header('Gabor Filters')
 st.write('This step filters the lines in the image based on a range of angles specified by the parameters in the sidebar.')
@@ -194,12 +194,12 @@ image_g = apply_filter(output, gfilters)
 fig_gabor = px.imshow(image_g,aspect='auto',color_continuous_scale = 'gray', width=800, height=800)
 st.plotly_chart(fig_gabor)
 
-##### KMeans
+##### KMeans #####
     
 st.header('Kmeans Computation')
 st.write('If K-Means is used in this step, the resultant image will be used in the rest of the workflow. Otherwise, this step will be skipped.')
 st.sidebar.header('Kmeans Args')
-kmeans_check = st.sidebar.checkbox('Would you like to run KMeans?')
+kmeans_check = st.sidebar.checkbox('Would you like to run KMeans?', value = True)
 if kmeans_check == True:
     k_value = st.sidebar.number_input('What K-value would you want to try?', value = 10, min_value = 2)
     res2 = KMeans(image_g, k_value)
@@ -208,7 +208,7 @@ if kmeans_check == True:
     fig_kmeans.update_xaxes(visible=False)
     st.plotly_chart(fig_kmeans)
 
-##### Canny Edge Detection
+##### Canny Edge Detection #####
 
 st.header('Canny Edge Detection')
 st.write('This step detects edges contained in the resultant image and connects qualifying edges based on the threshold values in the sidebar. An optional L2 gradient can also be used.')
@@ -242,7 +242,7 @@ else:
 fig_canny = px.imshow(edge,aspect='auto',color_continuous_scale = 'gray', width=800, height=800)
 st.plotly_chart(fig_canny)
 
-##### Hough Transform
+##### Hough Transform #####
 
 st.header('Hough Transform')
 st.write('This step will check for continuous lines and optionally remove any lines that exceed an angle threshold.')
@@ -253,24 +253,31 @@ hough_thresh = st.sidebar.slider('Threshold', 1, 100, 10)
 minLineLength = st.sidebar.slider('Minimum Line Length', 1, 50, 10)  # Larger Values produce more edges
 maxLineGap = st.sidebar.slider('Maximum Line Gap', 1, 50, 5)
 angle_check = st.sidebar.checkbox('Keep Only Horizontal Lines?', value = True)
-if angle_check == True:
-    angle_thresh = st.sidebar.slider('Angle Threshold', 10, 90, 10)
+# if angle_check == True:
+#     angle_thresh = st.sidebar.slider('Angle Threshold', 10, 90, 10)
 
 lines = cv2.HoughLinesP(edge, hough_rho, np.pi/180, threshold=hough_thresh, minLineLength=minLineLength, maxLineGap=maxLineGap)
 dummy = np.ones(shape=mat2.shape, dtype=np.uint8)
+horizontals = 0
 
 if lines is not None:
-    statement = f'There are {len(lines)} lines in this image'
-    st.success(statement)
     for line in range(0, len(lines)):
         l = lines[line][0]
         pt1 = (l[0], l[1])
         pt2 = (l[2], l[3])
-        angle = np.arctan2(l[3] - l[1], l[2] - l[0]) * 180. / np.pi
-        if angle_check == True and angle < angle_thresh:
+        # angle = np.arctan2(l[3] - l[1], l[2] - l[0]) * 180. / np.pi
+        #TODO: should this check be adjustable with thresh_angle?
+        if angle_check == True and (np.abs(l[3] - l[1]) < 5):
             cv2.line(dummy, pt1, pt2, (0,0,255), 1)
+            horizontals += 1
         elif angle_check == False:
             cv2.line(dummy, pt1, pt2, (0,0,255), 1)
+    if horizontals > 0:
+        statement = f'{horizontals} horizontal lines are detected in this image'
+        st.success(statement)
+    elif horizontals == 0:
+        statement = f'No horizontal lines are detected in this image'
+        st.error(statement)
 elif lines == None:
     statement = 'There are no lines in this image'
     st.error(statement)
@@ -281,10 +288,10 @@ masked = np.ma.masked_where(dummy == 1, dummy)
 fig_hough, ax_hough = plt.subplots(figsize=[10,10])
 ax_hough.imshow(ori_img, cmap='YlOrBr_r', aspect='auto', vmin=color_range[0], vmax=color_range[1])
 ax_hough.imshow(masked, cmap = 'gray', aspect='auto', alpha=0.7)
-plt.xticks([]), plt.yticks([])
+plt.axis('off')
 st.pyplot(fig_hough)
 
-##### Option for downloading all images in a subplot
+##### Option for downloading all images in a subplot #####
 
 fig_total, ((ax1, ax2, ax3), (ax4, ax5, ax6)) = plt.subplots(2, 3, figsize=(25, 25))
 
